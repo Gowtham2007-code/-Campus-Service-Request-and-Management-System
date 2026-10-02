@@ -1,6 +1,10 @@
 const TOKEN_KEY = 'campus_token';
 const USER_KEY = 'campus_user';
 
+// Local: '' → requests use Vite proxy (/api → localhost:5000)
+// Production: VITE_API_URL → requests go to Render backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 export const getStoredToken = () => {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -38,6 +42,7 @@ export const clearStoredAuth = () => {
 
 export async function request(endpoint, options = {}) {
   const token = getStoredToken();
+
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -53,13 +58,17 @@ export async function request(endpoint, options = {}) {
   };
 
   if (options.body) {
-    config.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    config.body =
+      typeof options.body === 'string'
+        ? options.body
+        : JSON.stringify(options.body);
   }
 
-  const response = await fetch(endpoint, config);
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
   let data = null;
   const contentType = response.headers.get('content-type');
+
   if (contentType && contentType.includes('application/json')) {
     try {
       data = await response.json();
@@ -69,16 +78,27 @@ export async function request(endpoint, options = {}) {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && !endpoint.includes('/api/auth/login')) {
+    if (
+      response.status === 401 &&
+      !endpoint.includes('/api/auth/login')
+    ) {
       clearStoredAuth();
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/login'
+      ) {
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       }
     }
-    const errorMessage = data?.message || `Request failed with status ${response.status}`;
+
+    const errorMessage =
+      data?.message || `Request failed with status ${response.status}`;
+
     const error = new Error(errorMessage);
     error.status = response.status;
     error.data = data;
+
     throw error;
   }
 
@@ -86,10 +106,17 @@ export async function request(endpoint, options = {}) {
 }
 
 export const api = {
-  get: (url, opts) => request(url, { ...opts, method: 'GET' }),
-  post: (url, body, opts) => request(url, { ...opts, method: 'POST', body }),
-  put: (url, body, opts) => request(url, { ...opts, method: 'PUT', body }),
-  delete: (url, opts) => request(url, { ...opts, method: 'DELETE' }),
+  get: (url, opts) =>
+    request(url, { ...opts, method: 'GET' }),
+
+  post: (url, body, opts) =>
+    request(url, { ...opts, method: 'POST', body }),
+
+  put: (url, body, opts) =>
+    request(url, { ...opts, method: 'PUT', body }),
+
+  delete: (url, opts) =>
+    request(url, { ...opts, method: 'DELETE' }),
 };
 
 export default api;
